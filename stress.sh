@@ -2,7 +2,7 @@
 
 show_help() {
 cat << EOF
-Usage: ${0##*/} -u BASE_URL [-a ACCESS_LOG] [-s] [-t NUM_THREADS] [-n NUM_LINES] [-d DELAY_IN_SECS] [-p]  [-l OUT_CURL_LOG] [-r]
+Usage: ${0##*/} [-u BASE_URL] [-a ACCESS_LOG] [-s] [-t NUM_THREADS] [-n NUM_LINES] [-d DELAY_IN_SECS] [-p]  [-l CURL_LOG] [-r]
 
     -s  shuffle sample
     -p  show progress
@@ -49,30 +49,32 @@ while getopts "ha:n:t:u:d:pl:rs" opt; do
     esac
 done
 
-[ "$url" = "" ] && show_help && exit 1
 [ "$report" != "" ] && [ "$curllog" = "/dev/null" ] && curllog="/tmp/$(basename $0).$$.$RANDOM.tmp.log" deletecurllog="1"
 
->&2 echo "Preparing input..."
-tmpinput="/tmp/$(basename $0).$$.$RANDOM.tmp.log"
-if [ "$shuffle" = "shuf" ]; then
-    $shuffle -n `expr $num_lines \* 2` $accesslog > $tmpinput || exit 1
-else
-    tmpinput=$accesslog
+
+if [ "$url" != "" ]; then
+    >&2 echo "Preparing input..."
+    tmpinput="/tmp/$(basename $0).$$.$RANDOM.tmp.log"
+    if [ "$shuffle" = "shuf" ]; then
+        $shuffle -n `expr $num_lines \* 2` $accesslog > $tmpinput || exit 1
+    else
+        tmpinput=$accesslog
+    fi
+
+    before=`date +%s`
+
+    echo "Start testing..."
+    cat $tmpinput | grep '" 200 ' | grep -v "'" | awk -F '"' '{print $2}' | grep GET | head -n $num_lines | awk -F ' ' '{print $2}' | xargs -n1 -P $threads sh -c "curl -sL -w '%{http_code} %{time_total} %{size_download} %{url_effective}\\n' -o /dev/null '$url'\$1; sleep $delay" _ | $pv > $curllog || exit 1
+
+    rm -f $tmpinput
+
+    after=`date +%s`
+
+    elapsed=`expr $after - $before`
+    reqseq=`expr $num_lines / $elapsed`
+
+    >&2 echo "$reqseq req/seq"
 fi
-
-before=`date +%s`
-
-echo "Start testing..."
-cat $tmpinput | grep '" 200 ' | grep -v "'" | awk -F '"' '{print $2}' | grep GET | head -n $num_lines | awk -F ' ' '{print $2}' | xargs -n1 -P $threads sh -c "curl -sL -w '%{http_code} %{time_total} %{size_download} %{url_effective}\\n' -o /dev/null '$url'\$1; sleep $delay" _ | $pv > $curllog || exit 1
-
-rm -f $tmpinput
-
-after=`date +%s`
-
-elapsed=`expr $after - $before`
-reqseq=`expr $num_lines / $elapsed`
-
->&2 echo "$reqseq req/seq"
 
 if [ "$report" != "" ]; then
     cat $curllog | awk ' {
@@ -103,13 +105,14 @@ if [ "$report" != "" ]; then
             gsub(".*/.*.html.*", "topic pages", url))
         {}
 
-        count[url] += 1;
-        size[url] += $3;
+        count[url] += 1
+        size[url] += $3
         times[url] += $2
+        total_time += $2
     }
     END {
         for (i in times) {
-            print count[i], (times[i]/count[i]),size[i], i
+            printf "%.1f%% %d %.2f %d %s\n", times[i]/total_time*100, count[i], (times[i]/count[i]), size[i], i
         }
     }' | sort -n
 fi
