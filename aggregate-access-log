@@ -1,0 +1,74 @@
+#!/usr/bin/env awk -f
+
+function print_acc(ts, acc) {
+    for (i in acc["code"]) {
+        printf "%s response_code=%s count=%d\n", ts, i, acc["code"][i]
+    }
+    for (i in acc["times"]) {
+        printf "%s group_name=\"%s\" count=%d avg=%.1f max=%d min=%d\n", ts, i, acc["count"][i], acc["times"][i]/acc["count"][i], acc["max"][i], acc["min"][i]
+    }
+}
+
+{
+
+    ts = substr($4, 2, 19)
+    current_minute = substr(ts, 1, 16)
+    minute = substr(ts, 1, 16)
+
+    if (current_minute != last_minute) {
+
+        if (length(first_timestamp)>0) {
+
+            print_acc(first_timestamp, acc)
+        }
+
+        first_timestamp = ts
+        last_minute = current_minute;
+        delete acc
+    }
+
+    url = $6
+
+    if (gsub(".*article-.*mobile=true.*", "mobile/articles", url) ||
+        gsub(".*article-.*", "articles", url) ||
+        gsub(".*video-.*mobile=true.*", "mobile/video", url) ||
+        gsub(".*video-.*", "video", url) ||
+        gsub(".*columnist-.*mobile=true.*", "mobile/columnist", url) ||
+        gsub(".*columnist-.*", "columnist", url) ||
+        gsub(".*/(home|homeus|homeau)/index.html.*mobile=true.*", "mobile/home", url) ||
+        gsub(".*/(home|homeus|homeau)/index.html.*", "home", url) ||
+        gsub(".*index.html.*mobile=true.*", "mobile/channels", url) ||
+        gsub(".*index.html.*", "channels", url) ||
+        gsub(".*rss.*", "rss", url) ||
+        gsub(".*registration.*", "registration", url) ||
+        gsub(".*meta.*", "meta", url) ||
+        gsub(".*/geolocation/.*", "esi calls", url) ||
+        gsub(".*/mobile/.*", "mobile feed", url) ||
+        gsub(".*/api/.*", "api", url) ||
+        gsub(".*/home/search.html.*", "search", url) ||
+        gsub(".*/home/sitemap.*.html.*", "sitemap/html", url) ||
+        gsub(".*sitemap.*.xml.*", "sitemap/xml", url) ||
+        gsub(".*embed/video/.*", "embedded video", url) ||
+        gsub(".*videoarchive.*", "video archive", url) ||
+        gsub(".*c.*/item.cms.*", "cms items", url) ||
+        gsub(".*/.*.html.*", "topic pages", url) ||
+        gsub("^/$", "home", url) ||
+        gsub("^/.*$", "others", url))
+    {}
+
+    acc["code"][$8] +=1
+
+    acc["count"][url] += 1
+    acc["size"][url] += $9
+    acc["times"][url] += $10
+    if (length(acc["min"][url]) == 0 || acc["min"][url] > $10) {
+        acc["min"][url] = $10
+    }
+    if (acc["max"][url] < $10) {
+        acc["max"][url] = $10
+    }
+}
+END {
+    print_acc(first_timestamp, acc)
+
+}
