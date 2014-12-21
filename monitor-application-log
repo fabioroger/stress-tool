@@ -1,0 +1,10 @@
+#!/bin/bash
+
+while true; do
+    if ! [ -f application.log ]; then
+        sleep 1 # avoid race log rotation race condition
+        newlog=`ls application-*.log | sort | tail -n1`
+        echo "New application log: $newlog"
+        ln -sf $newlog application.log
+    fi
+done
