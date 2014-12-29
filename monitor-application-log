@@ -7,4 +7,5 @@ while true; do
         echo "New application log: $newlog"
         ln -sf $newlog application.log
     fi
+    sleep 5
 done
