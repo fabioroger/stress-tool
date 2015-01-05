@@ -7,6 +7,8 @@ function print_acc(ts, acc) {
     for (i in acc["times"]) {
         printf "%s group_name=\"%s\" count=%d avg=%.1f max=%d min=%d\n", ts, i, acc["count"][i], acc["times"][i]/acc["count"][i], acc["max"][i], acc["min"][i]
     }
+    print ts > "/dev/stderr"
+    fflush(stdout)
 }
 
 {
